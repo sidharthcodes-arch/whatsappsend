@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CSV to WhatsApp Outreach Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    .sent-row { opacity: 0.45; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-6">
+
+  <div class="max-w-6xl mx-auto space-y-6">
+    
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+      <div>
+        <h1 class="text-2xl font-bold text-white tracking-tight">CSV WhatsApp Outreach Launcher</h1>
+        <p class="text-sm text-slate-400">Upload your scraped Google Maps CSV, map the columns, and click through to send safely.</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <label class="text-xs font-medium text-slate-400">Open links in:</label>
+        <select id="launchMode" class="bg-slate-900 border border-slate-700 text-sm rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500">
+          <option value="app">WhatsApp Desktop App (Fastest - No Tab Reload)</option>
+          <option value="web">WhatsApp Web (Browser Tab)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Top Controls: CSV Upload + Message Template -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      
+      <!-- Left: CSV Upload & Column Mapping -->
+      <div class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-emerald-400">1. Upload CSV & Map Columns</h2>
+        
+        <div>
+          <input type="file" id="csvFile" accept=".csv" class="block w-full text-sm text-slate-300
+            file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0
+            file:text-sm file:font-semibold file:bg-emerald-500 file:text-slate-950
+            hover:file:bg-emerald-400 cursor-pointer bg-slate-950 rounded-lg border border-slate-800 p-1.5" />
+        </div>
+
+        <div id="columnSelectors" class="grid grid-cols-2 gap-3 hidden">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Business Name Column</label>
+            <select id="nameCol" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-sm text-white"></select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Phone Number Column</label>
+            <select id="phoneCol" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-sm text-white"></select>
+          </div>
+        </div>
+
+        <div class="space-y-2 pt-1">
+          <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+            <input type="checkbox" id="cleanNames" checked class="rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-0" onchange="renderTable()" />
+            Auto-clean long Google Maps titles (strip after "-" or "|")
+          </label>
+          <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+            <input type="checkbox" id="onlyMobile" checked class="rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-0" onchange="renderTable()" />
+            Hide landlines & invalid numbers (keep only 10-digit Indian mobile)
+          </label>
+        </div>
+
+        <div class="pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+          <span id="statsText">0 valid leads loaded</span>
+          <button onclick="clearSentHistory()" class="text-rose-400 hover:underline">Reset "Sent" History</button>
+        </div>
+      </div>
+
+      <!-- Right: Message Template -->
+      <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-emerald-400">2. Message Template</h2>
+            <span class="text-xs text-slate-400">Use <code class="bg-slate-800 text-emerald-300 px-1.5 py-0.5 rounded">{name}</code> for Business Name</span>
+          </div>
+          <textarea id="msgTemplate" rows="6" oninput="renderTable()" class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-sm text-slate-100 focus:outline-none focus:border-emerald-500 leading-relaxed">Hi {name} team! 👋
+
+I’m a local software developer launching a new Restaurant POS & Billing System (Table billing, KOT printing, GST receipts, and daily sales tracking—with zero yearly renewal fees like Petpooja).
+
+Before our public launch, I’m giving 3 local cafes full access completely FREE for 30 days (including free menu setup) in exchange for honest feedback and a short testimonial.
+
+Would you be open to claiming one of the 3 free beta spots this week? Just reply "DEMO" and I’ll send over a quick 30-second video preview of how the billing screen works!</textarea>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Leads Table -->
+    <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b border-slate-800 bg-slate-950/60 text-xs uppercase text-slate-400">
+              <th class="py-3.5 px-4 w-12">#</th>
+              <th class="py-3.5 px-4">Business Name (Editable)</th>
+              <th class="py-3.5 px-4">Mobile Number</th>
+              <th class="py-3.5 px-4">Status</th>
+              <th class="py-3.5 px-4 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="leadsBody" class="divide-y divide-slate-800/70 text-sm">
+            <tr>
+              <td colspan="5" class="py-12 text-center text-slate-500">
+                Upload a CSV file above to generate your clickable WhatsApp table.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let rawRows = [];
+    let headers = [];
+    let sentPhones = JSON.parse(localStorage.getItem('wa_sent_phones') || '{}');
+
+    // Robust CSV Line Parser (handles commas inside quotes)
+    function parseCSV(text) {
+      const rows = [];
+      let currentRow = [];
+      let currentVal = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const nextChar = text[i + 1];
+
+        if (char === '"') {
+          if (inQuotes && nextChar === '"') {
+            currentVal += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          currentRow.push(currentVal.trim());
+          currentVal = '';
+        } else if ((char === '\r' || char === '\n') && !inQuotes) {
+          if (char === '\r' && nextChar === '\n') i++;
+          currentRow.push(currentVal.trim());
+          if (currentRow.some(cell => cell !== '')) rows.push(currentRow);
+          currentRow = [];
+          currentVal = '';
+        } else {
+          currentVal += char;
+        }
+      }
+      if (currentVal || currentRow.length > 0) {
+        currentRow.push(currentVal.trim());
+        if (currentRow.some(cell => cell !== '')) rows.push(currentRow);
+      }
+      return rows;
+    }
+
+    document.getElementById('csvFile').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        const parsed = parseCSV(evt.target.result);
+        if (parsed.length < 2) {
+          alert('CSV seems empty or invalid.');
+          return;
+        }
+
+        headers = parsed[0];
+        rawRows = parsed.slice(1);
+
+        const nameSelect = document.getElementById('nameCol');
+        const phoneSelect = document.getElementById('phoneCol');
+        nameSelect.innerHTML = '';
+        phoneSelect.innerHTML = '';
+
+        headers.forEach((h, idx) => {
+          const opt1 = new Option(h || `Column ${idx + 1}`, idx);
+          const opt2 = new Option(h || `Column ${idx + 1}`, idx);
+          nameSelect.add(opt1);
+          phoneSelect.add(opt2);
+
+          const lower = h.toLowerCase();
+          if (lower.includes('title') || lower.includes('name') || lower.includes('business')) {
+            nameSelect.value = idx;
+          }
+          if (lower.includes('phone') || lower.includes('mobile') || lower.includes('tel') || lower.includes('number')) {
+            phoneSelect.value = idx;
+          }
+        });
+
+        document.getElementById('columnSelectors').classList.remove('hidden');
+        nameSelect.onchange = renderTable;
+        phoneSelect.onchange = renderTable;
+
+        renderTable();
+      };
+      reader.readAsText(file);
+    });
+
+    function cleanBusinessName(name) {
+      if (!name) return '';
+      if (!document.getElementById('cleanNames').checked) return name.trim();
+      return name.split(/\s+[-|–•:]\s+/)[0].trim();
+    }
+
+    function extractIndianMobile(raw) {
+      if (!raw) return null;
+      const digits = raw.replace(/\D/g, '');
+      if (digits.length === 10 && /^[6-9]/.test(digits)) return digits;
+      if (digits.length === 11 && digits.startsWith('0') && /^[6-9]/.test(digits.slice(1))) return digits.slice(1);
+      if (digits.length === 12 && digits.startsWith('91') && /^[6-9]/.test(digits.slice(2))) return digits.slice(2);
+      return null;
+    }
+
+    function buildWhatsAppUrl(phone, name) {
+      const template = document.getElementById('msgTemplate').value;
+      const personalized = template.replace(/\{name\}/g, name);
+      const encodedMsg = encodeURIComponent(personalized);
+      const mode = document.getElementById('launchMode').value;
+
+      if (mode === 'app') {
+        return `whatsapp://send?phone=91${phone}&text=${encodedMsg}`;
+      } else {
+        return `https://web.whatsapp.com/send?phone=91${phone}&text=${encodedMsg}`;
+      }
+    }
+
+    function renderTable() {
+      if (rawRows.length === 0) return;
+
+      const nameIdx = parseInt(document.getElementById('nameCol').value, 10);
+      const phoneIdx = parseInt(document.getElementById('phoneCol').value, 10);
+      const onlyMobile = document.getElementById('onlyMobile').checked;
+      const tbody = document.getElementById('leadsBody');
+      tbody.innerHTML = '';
+
+      let validCount = 0;
+      const seenPhones = new Set();
+
+      rawRows.forEach((row, idx) => {
+        const rawName = row[nameIdx] || 'Cafe';
+        const rawPhone = row[phoneIdx] || '';
+        const cleanPhone = extractIndianMobile(rawPhone);
+
+        if (onlyMobile && !cleanPhone) return;
+        const finalPhone = cleanPhone || rawPhone.replace(/\D/g, '');
+        if (!finalPhone || seenPhones.has(finalPhone)) return;
+        seenPhones.add(finalPhone);
+
+        validCount++;
+        const displayName = cleanBusinessName(rawName);
+        const isSent = !!sentPhones[finalPhone];
+
+        const tr = document.createElement('tr');
+        tr.id = `row-${finalPhone}`;
+        tr.className = `hover:bg-slate-800/40 transition ${isSent ? 'sent-row' : ''}`;
+
+        tr.innerHTML = `
+          <td class="py-3 px-4 text-slate-500 font-mono text-xs">${validCount}</td>
+          <td class="py-3 px-4">
+            <input type="text" value="${displayName.replace(/"/g, '&quot;')}" 
+              data-phone="${finalPhone}"
+              oninput="updateRowLink('${finalPhone}', this.value)"
+              class="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-sm text-white w-full max-w-xs focus:border-emerald-500 focus:outline-none" />
+          </td>
+          <td class="py-3 px-4 font-mono text-slate-300">+91 ${finalPhone}</td>
+          <td class="py-3 px-4">
+            <span id="badge-${finalPhone}" class="text-xs px-2 py-0.5 rounded-full font-medium ${isSent ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-slate-800 text-slate-400'}">
+              ${isSent ? 'Clicked ✓' : 'Pending'}
+            </span>
+          </td>
+          <td class="py-3 px-4 text-right">
+            <a id="btn-${finalPhone}" 
+               href="${buildWhatsAppUrl(finalPhone, displayName)}"
+               target="_blank"
+               onclick="markAsSent('${finalPhone}')"
+               class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-semibold text-xs transition ${isSent ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400'}">
+              <span>${isSent ? 'Send Again' : 'Send WhatsApp'}</span>
+              <span>➔</span>
+            </a>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      const sentTotal = Object.keys(sentPhones).filter(p => seenPhones.has(p)).length;
+      document.getElementById('statsText').textContent = `${validCount} valid mobile leads (${sentTotal} sent)`;
+    }
+
+    function updateRowLink(phone, newName) {
+      const btn = document.getElementById(`btn-${phone}`);
+      if (btn) {
+        btn.href = buildWhatsAppUrl(phone, newName);
+      }
+    }
+
+    function markAsSent(phone) {
+      sentPhones[phone] = Date.now();
+      localStorage.setItem('wa_sent_phones', JSON.stringify(sentPhones));
+
+      const row = document.getElementById(`row-${phone}`);
+      const badge = document.getElementById(`badge-${phone}`);
+      const btn = document.getElementById(`btn-${phone}`);
+
+      if (row) row.classList.add('sent-row');
+      if (badge) {
+        badge.textContent = 'Clicked ✓';
+        badge.className = 'text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-950 text-emerald-400 border border-emerald-800';
+      }
+      if (btn) {
+        btn.className = 'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-semibold text-xs transition bg-slate-800 text-slate-400 hover:bg-slate-700';
+        btn.querySelector('span').textContent = 'Send Again';
+      }
+    }
+
+    function clearSentHistory() {
+      if (confirm('Clear all "Clicked/Sent" status markers?')) {
+        sentPhones = {};
+        localStorage.removeItem('wa_sent_phones');
+        renderTable();
+      }
+    }
+
+    document.getElementById('launchMode').addEventListener('change', renderTable);
+  </script>
+</body>
+</html>
