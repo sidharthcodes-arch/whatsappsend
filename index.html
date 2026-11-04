@@ -42,7 +42,7 @@
             class="bg-slate-900 border border-slate-700 text-sm rounded-lg px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
           >
             <option value="app">
-              WhatsApp Desktop App (Fastest - No Tab Reload)
+              WhatsApp App (Mobile / Desktop - Direct App Launch)
             </option>
             <option value="web">WhatsApp Web (Browser Tab)</option>
           </select>
@@ -211,8 +211,22 @@ Would you be open to claiming one of the 3 free beta spots this week? Just reply
       );
       let cooldownTimer = null;
 
-      // Set default launch mode to WhatsApp Web so it works out-of-the-box on Linux
-      document.getElementById("launchMode").value = "web";
+      function isMobileDevice() {
+        return (
+          /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+            navigator.userAgent,
+          ) ||
+          (window.innerWidth <= 768 &&
+            ("ontouchstart" in window || navigator.maxTouchPoints > 0))
+        );
+      }
+
+      // Auto-detect device: On mobile, default to "app" to directly launch the native WhatsApp app
+      if (isMobileDevice()) {
+        document.getElementById("launchMode").value = "app";
+      } else {
+        document.getElementById("launchMode").value = "web";
+      }
 
       function parseCSV(text) {
         const rows = [];
@@ -332,7 +346,8 @@ Would you be open to claiming one of the 3 free beta spots this week? Just reply
         const encodedMsg = encodeURIComponent(personalized);
         const mode = document.getElementById("launchMode").value;
 
-        if (mode === "app") {
+        // On mobile or when "app" is selected, launch WhatsApp app directly
+        if (mode === "app" || isMobileDevice()) {
           return `whatsapp://send?phone=91${phone}&text=${encodedMsg}`;
         } else {
           return `https://web.whatsapp.com/send?phone=91${phone}&text=${encodedMsg}`;
@@ -374,7 +389,11 @@ Would you be open to claiming one of the 3 free beta spots this week? Just reply
           tr.id = `row-${finalPhone}`;
           tr.className = `hover:bg-slate-800/40 transition ${isSent ? "sent-row" : ""}`;
 
-          // FIXED: target="whatsapp_reused_tab" prevents opening 50 separate tabs
+          const mode = document.getElementById("launchMode").value;
+          const isAppLaunch = mode === "app" || isMobileDevice();
+          // On mobile or App mode, omitting target opens the native app in-place with ZERO browser tabs!
+          const targetAttr = isAppLaunch ? "" : 'target="whatsapp_reused_tab"';
+
           tr.innerHTML = `
         <td class="py-3 px-4 text-slate-500 font-mono text-xs">${validCount}</td>
         <td class="py-3 px-4">
@@ -392,7 +411,7 @@ Would you be open to claiming one of the 3 free beta spots this week? Just reply
         <td class="py-3 px-4 text-right">
           <a id="btn-${finalPhone}" 
              href="${buildWhatsAppUrl(finalPhone, displayName)}"
-             target="whatsapp_reused_tab"
+             ${targetAttr}
              onclick="markAsSent('${finalPhone}')"
              class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-semibold text-xs transition ${isSent ? "bg-slate-800 text-slate-400 hover:bg-slate-700" : "bg-emerald-500 text-slate-950 hover:bg-emerald-400"}">
             <span>${isSent ? "Send Again" : "Send WhatsApp"}</span>

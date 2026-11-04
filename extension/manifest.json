@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Google Maps Lead Scraper & Outreach",
+  "version": "1.0",
+  "description": "Scrapes Google Maps place names and phone numbers with 1 click, cleaned for WhatsApp outreach.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://www.google.com/maps/*",
+    "*://maps.google.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Google Maps Lead Scraper"
+  }
+}
+
